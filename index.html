@@ -1,0 +1,572 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Rayuel-o-matic</title>
+<meta name="description" content="Una máquina mínima para leer Rayuela, de Julio Cortázar, siguiendo el Tablero de dirección: te dice qué capítulo toca y recuerda por dónde vas.">
+<meta property="og:title" content="Rayuel-o-matic">
+<meta property="og:description" content="Una máquina mínima para leer Rayuela siguiendo el Tablero de dirección.">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#f4f0e6" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#151412" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23f4f0e6'/%3E%3Cg fill='none' stroke='%231e1c19' stroke-width='1.5'%3E%3Cpath d='M9 10.5a7 7 0 0 1 14 0z'/%3E%3Cpath d='M9 10.5h14v6H9zM16 10.5v6M12.5 16.5h7v6h-7zM12.5 22.5h7v6h-7z'/%3E%3C/g%3E%3Cellipse cx='17.6' cy='26' rx='1.9' ry='1.4' fill='%231e1c19'/%3E%3C/svg%3E">
+<style>
+:root{
+  --papel:#f4f0e6; --tinta:#1e1c19; --tenue:#676257; --linea:rgba(30,28,25,.16); --tiza:rgba(30,28,25,.34);
+  --serif:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua","URW Palladio L",P052,Georgia,serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root{--papel:#151412; --tinta:#ebe5d9; --tenue:#a39d91; --linea:rgba(235,229,217,.18); --tiza:rgba(235,229,217,.36)}
+}
+*,*::before,*::after{box-sizing:border-box}
+[hidden]{display:none!important}
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+body{margin:0;min-height:100vh;min-height:100svh;display:flex;flex-direction:column;background:var(--papel);color:var(--tinta);font-family:var(--serif);font-size:1.0625rem;line-height:1.45;-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent}
+button,input,select{font:inherit;color:inherit}
+button{background:none;border:0;padding:0;cursor:pointer}
+:focus-visible{outline:1.5px solid var(--tinta);outline-offset:3px;border-radius:6px}
+.sr{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+header{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:max(14px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) 0 max(16px,env(safe-area-inset-left))}
+.marca{margin:0;font-size:1rem;font-weight:400;font-style:italic;letter-spacing:.01em}
+.libro{position:relative;color:var(--tenue)}
+.libro::after{content:"▾";position:absolute;right:.2em;top:50%;transform:translateY(-50%);font-size:.7em;pointer-events:none}
+.libro select{appearance:none;-webkit-appearance:none;background:transparent;border:0;border-radius:6px;padding:.3em 1.25em .3em .3em;color:var(--tenue);font-size:.95rem;cursor:pointer}
+.libro select:hover{color:var(--tinta)}
+
+main{flex:1;display:flex;align-items:center;justify-content:center;gap:clamp(24px,7vw,104px);padding:16px}
+#rayuela{flex:none;height:min(64vh,540px);height:min(64svh,540px);width:auto;color:var(--tinta);overflow:visible}
+#rayuela .c{fill:none;stroke:currentColor;stroke-width:1.25;vector-effect:non-scaling-stroke;stroke-linejoin:round}
+#rayuela .c.pisada{fill:url(#tiza)}
+#tiza line{stroke:var(--tiza);stroke-width:1.1}
+#rayuela text{fill:var(--tenue);font-family:var(--serif);font-size:13px;text-anchor:middle;dominant-baseline:central}
+#rayuela text.l{font-style:italic;font-size:12px;letter-spacing:.06em}
+#piedra{fill:currentColor}
+
+.panel{display:flex;flex-direction:column;align-items:center;text-align:center;min-width:9.5rem}
+.etq{margin:0;color:var(--tenue);font-size:.92rem;letter-spacing:.16em;font-variant:small-caps}
+.num,.ir input{font-size:clamp(4.6rem,15vw,8.75rem);line-height:1.05;font-variant-numeric:lining-nums tabular-nums;letter-spacing:-.01em}
+.num{padding:0 .1em;border-radius:10px;min-width:2.2ch}
+.num:hover{text-decoration:underline dotted 1px;text-decoration-color:var(--tenue);text-underline-offset:.14em}
+.num.fin{font-size:clamp(2rem,6vw,3.4rem);letter-spacing:.3em;padding:.55em 0 .55em .3em;cursor:default;text-decoration:none}
+.ir input{width:3.2ch;text-align:center;background:transparent;border:0;border-bottom:1px solid var(--tinta);border-radius:0;padding:0;margin:0}
+.ir input:focus-visible{outline:none}
+.ir input::placeholder{color:var(--linea)}
+.nota{margin:.1rem 0 1.4rem;min-height:2.6em;max-width:13rem;color:var(--tenue);font-size:.85rem;line-height:1.3;font-variant-numeric:tabular-nums;text-wrap:balance}
+.sig{border:1px solid var(--tinta);border-radius:999px;padding:.6em 1.35em .64em;font-size:1.06rem;line-height:1.2;white-space:nowrap;transition:background-color .15s,color .15s}
+.sig:hover{background:var(--tinta);color:var(--papel)}
+.sig:active{transform:translateY(1px)}
+.ant{margin-top:.75rem;padding:.35em .6em;color:var(--tenue);font-size:.88rem;border-radius:999px}
+.ant:hover{color:var(--tinta)}
+.ant.nada{visibility:hidden}
+
+footer{display:flex;justify-content:center;align-items:baseline;flex-wrap:wrap;gap:0 .35rem;padding:0 16px max(16px,env(safe-area-inset-bottom));color:var(--tenue);font-size:.85rem}
+footer button{padding:.45em .25em;text-decoration:underline;text-decoration-color:transparent;text-underline-offset:.22em;transition:text-decoration-color .15s,color .15s}
+footer button:hover{color:var(--tinta);text-decoration-color:currentColor}
+
+dialog{width:min(30rem,calc(100vw - 32px));max-height:min(85vh,44rem);overflow:auto;padding:0;border:1px solid var(--linea);border-radius:14px;background:var(--papel);color:var(--tinta);box-shadow:0 24px 70px rgba(0,0,0,.2)}
+dialog::backdrop{background:rgba(20,18,15,.32)}
+.dlg{position:relative;padding:22px 22px 20px}
+.dlg h2{margin:0 2rem .9rem 0;font-size:.8rem;font-weight:400;letter-spacing:.16em;font-variant:small-caps;color:var(--tenue)}
+.dlg p{margin:.65rem 0}
+.x{position:absolute;top:10px;right:10px;width:2.2rem;height:2.2rem;border-radius:50%;color:var(--tenue);font-size:1.35rem;line-height:1}
+.x:hover{color:var(--tinta)}
+.pie{color:var(--tenue);font-size:.88rem}
+.acciones{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center}
+.btn{border:1px solid var(--tinta);border-radius:999px;padding:.38em 1em;font-size:.92rem;transition:background-color .15s,color .15s}
+.btn:hover{background:var(--tinta);color:var(--papel)}
+.btn.sec{border-color:var(--linea);color:var(--tenue)}
+.btn.sec:hover{background:transparent;color:var(--tinta);border-color:var(--tinta)}
+.enlace{color:var(--tenue);font-size:.88rem;text-decoration:underline;text-underline-offset:.2em}
+.enlace:hover{color:var(--tinta)}
+.codigo{margin:.8rem 0;padding:.7em .8em;border:1px dashed var(--tiza);border-radius:10px;font:1.08rem/1.5 var(--mono);letter-spacing:.06em;text-align:center;overflow-wrap:anywhere;-webkit-user-select:all;user-select:all}
+.cargar{margin-top:1.3rem;padding-top:1rem;border-top:1px solid var(--linea)}
+.cargar label{display:block;font-size:.92rem}
+.campo{display:flex;gap:.5rem;margin-top:.5rem}
+.campo input{flex:1;min-width:0;padding:.42em .7em;border:1px solid var(--linea);border-radius:10px;background:transparent;font:1rem var(--mono);letter-spacing:.04em;text-transform:uppercase}
+.campo input:focus-visible{outline:none;border-color:var(--tinta)}
+.aviso{min-height:1.3em;margin:.5rem 0 0;color:var(--tenue);font-size:.85rem}
+.ses{list-style:none;margin:.3rem 0 0;padding:0}
+.ses li{display:grid;grid-template-columns:6.6rem 1fr;gap:.9rem;padding:.6rem 0;border-top:1px solid var(--linea);font-variant-numeric:tabular-nums}
+.ses .f{color:var(--tenue);font-size:.88rem;padding-top:.08em}
+.sin-js{text-align:center;padding:2rem}
+@media (max-height:520px){
+  main{padding:6px 16px}
+  #rayuela{height:calc(100vh - 112px);height:calc(100svh - 112px)}
+  .num,.ir input{font-size:clamp(3rem,17vh,5rem)}
+  .nota{margin-bottom:.7rem;min-height:0}
+  .ant{margin-top:.3rem}
+  footer{padding-bottom:max(8px,env(safe-area-inset-bottom))}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<header>
+  <h1 class="marca">rayuel-o-matic</h1>
+  <label class="libro">
+    <span class="sr">Lectura</span>
+    <select id="libro">
+      <option value="1">primer libro</option>
+      <option value="2">segundo libro</option>
+    </select>
+  </label>
+</header>
+
+<main>
+  <svg id="rayuela" viewBox="0 12 120 448" role="img" aria-labelledby="rayuela-t">
+    <title id="rayuela-t">La piedrita está en la casilla 1 de la rayuela.</title>
+    <defs>
+      <pattern id="tiza" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(40)">
+        <line x1="2.5" y1="0" x2="2.5" y2="5"/>
+      </pattern>
+    </defs>
+    <path class="c" data-k="10" d="M10 70A50 50 0 0 1 110 70Z"/>
+    <rect class="c" data-k="8" x="10" y="70" width="50" height="50"/>
+    <rect class="c" data-k="9" x="60" y="70" width="50" height="50"/>
+    <rect class="c" data-k="7" x="35" y="120" width="50" height="50"/>
+    <rect class="c" data-k="5" x="10" y="170" width="50" height="50"/>
+    <rect class="c" data-k="6" x="60" y="170" width="50" height="50"/>
+    <rect class="c" data-k="4" x="35" y="220" width="50" height="50"/>
+    <rect class="c" data-k="3" x="35" y="270" width="50" height="50"/>
+    <rect class="c" data-k="2" x="35" y="320" width="50" height="50"/>
+    <rect class="c" data-k="1" x="35" y="370" width="50" height="50"/>
+    <g aria-hidden="true">
+      <text class="l" x="60" y="47">cielo</text>
+      <text x="35" y="94">8</text><text x="85" y="94">9</text>
+      <text x="60" y="144">7</text>
+      <text x="35" y="194">5</text><text x="85" y="194">6</text>
+      <text x="60" y="244">4</text>
+      <text x="60" y="294">3</text>
+      <text x="60" y="344">2</text>
+      <text x="60" y="394">1</text>
+      <text class="l" x="60" y="444">tierra</text>
+    </g>
+    <path id="piedra" transform="translate(72 407)" d="M-6.5 1.2C-6.8-3-2.6-5.4 1.6-5.1 5.6-4.8 7.4-1.6 6.7 1.9 6 5 2.4 6.1-1.4 5.7-4.6 5.4-6.3 3.6-6.5 1.2Z"/>
+  </svg>
+
+  <section class="panel" aria-label="Capítulo que toca">
+    <p class="etq" id="etq">capítulo</p>
+    <button class="num" id="num" type="button" title="Cambiar de capítulo">73</button>
+    <form class="ir" id="ir" hidden>
+      <label class="sr" for="ir-n">Ir al capítulo</label>
+      <input id="ir-n" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="3" autocomplete="off" enterkeyhint="go">
+    </form>
+    <p class="nota" id="nota"></p>
+    <button class="sig" id="sig" type="button">siguiente →</button>
+    <button class="ant nada" id="ant" type="button">← anterior</button>
+    <p class="sr" id="voz" aria-live="polite"></p>
+  </section>
+</main>
+
+<footer>
+  <button type="button" data-abre="sesiones">sesiones</button>
+  <span aria-hidden="true">·</span>
+  <button type="button" data-abre="llevar">otro dispositivo</button>
+  <span aria-hidden="true">·</span>
+  <button type="button" data-abre="acerca">acerca</button>
+</footer>
+
+<dialog id="sesiones" aria-labelledby="sesiones-t">
+  <div class="dlg">
+    <h2 id="sesiones-t">sesiones</h2>
+    <button class="x" type="button" data-cierra aria-label="Cerrar">×</button>
+    <p class="pie" id="ses-resumen"></p>
+    <ol class="ses" id="ses-lista"></ol>
+  </div>
+</dialog>
+
+<dialog id="llevar" aria-labelledby="llevar-t">
+  <div class="dlg">
+    <h2 id="llevar-t">otro dispositivo</h2>
+    <button class="x" type="button" data-cierra aria-label="Cerrar">×</button>
+    <p id="llevar-txt"></p>
+    <p class="codigo" id="codigo"></p>
+    <p class="acciones">
+      <button class="btn" type="button" id="copiar">copiar código</button>
+      <button class="btn sec" type="button" id="compartir">compartir enlace</button>
+    </p>
+    <form class="cargar" id="cargar">
+      <label for="cargar-c">¿Vienes de otro dispositivo? Escribe aquí su código:</label>
+      <div class="campo">
+        <input id="cargar-c" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="XXXX-XXXX-…">
+        <button class="btn">cargar</button>
+      </div>
+      <p class="aviso" id="cargar-aviso" role="status"></p>
+    </form>
+  </div>
+</dialog>
+
+<dialog id="importar" aria-labelledby="importar-t">
+  <div class="dlg">
+    <h2 id="importar-t">cargar progreso</h2>
+    <p id="imp-txt"></p>
+    <p class="pie">Sustituye el progreso y las sesiones guardados en este dispositivo.</p>
+    <p class="acciones">
+      <button class="btn" type="button" id="imp-si">cargar</button>
+      <button class="btn sec" type="button" data-cierra>cancelar</button>
+    </p>
+  </div>
+</dialog>
+
+<dialog id="acerca" aria-labelledby="acerca-t">
+  <div class="dlg">
+    <h2 id="acerca-t">acerca</h2>
+    <button class="x" type="button" data-cierra aria-label="Cerrar">×</button>
+    <p><em>Rayuela</em> (1963) se puede leer de dos maneras, según su Tablero de dirección: el primer libro, del capítulo 1 al 56, en el orden de siempre; o el segundo, que empieza en el 73 y va saltando en el orden que Cortázar indica al pie de cada capítulo.</p>
+    <p>Esta máquina no trae el texto: tú pones el ejemplar. Te dice qué capítulo toca y recuerda por dónde vas. Al terminar uno, pulsa «siguiente». ¿Ya ibas por alguno? Toca el número y escríbelo.</p>
+    <p>Al final del segundo libro, el 58 y el 131 se remiten el uno al otro para siempre. La máquina, también.</p>
+    <p class="pie">Homenaje al Rayuel-o-matic que ideó el patafísico Juan Esteban Fassio (un mueble con cama, una gaveta por capítulo y una botonera) y que Cortázar describió en <em>La vuelta al día en ochenta mundos</em> (1967).</p>
+    <p class="pie">Tu progreso se guarda solo en este navegador. Con teclado: →&nbsp;siguiente, ←&nbsp;anterior.</p>
+    <p class="acciones">
+      <button class="enlace" type="button" id="reiniciar">volver al principio</button>
+      <span class="pie" aria-hidden="true">·</span>
+      <button class="enlace" type="button" id="borrar">borrar todo</button>
+    </p>
+  </div>
+</dialog>
+
+<noscript><p class="sin-js">El Rayuel-o-matic necesita JavaScript.</p></noscript>
+
+<script>
+(() => {
+'use strict';
+
+/* Tablero de dirección: el orden del segundo libro. */
+const T = [73,1,2,116,3,84,4,71,5,81,74,6,7,8,93,68,9,104,10,65,11,136,12,106,13,115,14,114,117,15,120,16,137,17,97,18,153,19,90,20,126,21,79,22,62,23,124,128,24,134,25,141,60,26,109,27,28,130,151,152,143,100,76,101,144,92,103,108,64,155,123,145,122,112,154,85,150,95,146,29,107,113,30,57,70,147,31,32,132,61,33,67,83,142,34,87,105,96,94,91,82,99,35,121,36,37,98,38,39,86,78,40,59,41,148,42,75,43,125,44,102,45,80,46,47,110,48,111,49,118,50,119,51,69,52,89,53,66,149,54,129,139,133,140,138,127,56,135,63,88,72,77,131,58,131];
+const TOTAL = {1: 56, 2: 154};   // capítulos distintos de cada lectura
+const PAUSA = 3 * 3600e3;        // más de 3 h sin avanzar abre una sesión nueva
+const CLAVE = 'rayuelomatic';
+const EPOCA = Date.UTC(2020, 0, 1);
+const B32 = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
+const CENTRO = {1:[60,395], 2:[60,345], 3:[60,295], 4:[60,245], 5:[35,195], 6:[85,195], 7:[60,145], 8:[35,95], 9:[85,95], 10:[60,50]};
+
+const $ = id => document.getElementById(id);
+const quieto = matchMedia('(prefers-reduced-motion: reduce)');
+
+// Capítulo que toca en la posición i (0 = fin del primer libro).
+// Tras el último 131, el 58 y el 131 se alternan para siempre.
+const capitulo = (l, i) => l === 1 ? (i < 56 ? i + 1 : 0) : i < T.length ? T[i] : (i - T.length) % 2 ? 131 : 58;
+const indice = (l, c) => l === 1 ? (c >= 1 && c <= 56 ? c - 1 : -1) : T.indexOf(c);
+const casilla = (l, i) => { const n = TOTAL[l], d = Math.min(i, n); return d >= n ? 10 : Math.floor(d * 9 / n) + 1; };
+const hoy = () => { const f = new Date(); return Math.round((Date.UTC(f.getFullYear(), f.getMonth(), f.getDate()) - EPOCA) / 864e5); };
+const plural = (n, uno, varios) => `${n} ${n === 1 ? uno : varios}`;
+const libroTxt = l => l === 1 ? 'primer libro' : 'segundo libro';
+const entero = (x, min, max) => Number.isInteger(x) && x >= min && x <= max;
+
+/* ---------- estado ----------
+   {libro, pos: {1, 2}, log: [tramo]}. Un tramo son capítulos seguidos de una lectura:
+   {d: día, l: libro, s: posición inicial, c: capítulos, j: 1 si es de la misma sesión que el anterior, t: última vez} */
+const nuevo = () => ({libro: 2, pos: {1: 0, 2: 0}, log: []});
+function sano(s) {
+  if (!s || (s.libro !== 1 && s.libro !== 2) || !s.pos || !entero(s.pos[1], 0, 56) || !entero(s.pos[2], 0, 1e6)) return null;
+  const log = (Array.isArray(s.log) ? s.log : [])
+    .filter(e => e && (e.l === 1 || e.l === 2) && entero(e.d, -1e5, 1e5) && entero(e.s, 0, 1e6) && entero(e.c, 1, 1e6))
+    .map((e, k) => ({d: e.d, l: e.l, s: e.s, c: e.c, j: k && e.j ? 1 : 0, t: +e.t || 0}));
+  return {libro: s.libro, pos: {1: s.pos[1], 2: s.pos[2]}, log};
+}
+function leer() { try { return sano(JSON.parse(localStorage.getItem(CLAVE))); } catch (e) { return null; } }
+function guardar() { try { localStorage.setItem(CLAVE, JSON.stringify(st)); } catch (e) {} }
+let st = leer() || nuevo();
+
+/* ---------- acciones ---------- */
+function siguiente() {
+  const l = st.libro, i = st.pos[l];
+  if (!capitulo(l, i)) return cambiarLibro(2);
+  const ahora = Date.now(), e = st.log[st.log.length - 1], enSesion = e && ahora - e.t < PAUSA;
+  if (enSesion && e.l === l && e.s + e.c === i) { e.c++; e.t = ahora; }
+  else st.log.push({d: hoy(), l, s: i, c: 1, j: enSesion ? 1 : 0, t: ahora});
+  st.pos[l] = i + 1;
+  guardar(); pintar(true);
+}
+function anterior() {
+  const l = st.libro, i = st.pos[l];
+  if (i === 0) return;
+  for (let k = st.log.length - 1; k >= 0; k--) {   // deshace la última anotación de esta lectura
+    const e = st.log[k];
+    if (e.l !== l) continue;
+    if (e.s + e.c === i && --e.c === 0) {
+      if (!e.j && st.log[k + 1]) st.log[k + 1].j = 0;   // si abría sesión, el tramo siguiente pasa a abrirla
+      st.log.splice(k, 1);
+    }
+    break;
+  }
+  st.pos[l] = i - 1;
+  guardar(); pintar(true);
+}
+function cambiarLibro(l) { st.libro = l; guardar(); pintar(true); }
+function irA(c) {
+  const l = st.libro;
+  if (!entero(c, 1, 155)) return avisar('Rayuela tiene 155 capítulos.');
+  const i = indice(l, c);
+  if (i < 0) return avisar(l === 1 ? 'El primer libro va del 1 al 56.' : 'El 55 no está en el segundo libro.');
+  st.pos[l] = i; guardar(); pintar(true);
+}
+
+/* ---------- pantalla ---------- */
+const el = {
+  libro: $('libro'), etq: $('etq'), num: $('num'), ir: $('ir'), irN: $('ir-n'), nota: $('nota'),
+  sig: $('sig'), ant: $('ant'), voz: $('voz'), titulo: $('rayuela-t'), piedra: $('piedra'),
+  casillas: [...document.querySelectorAll('#rayuela .c')]
+};
+let kAntes = 0, avisoHasta = 0, avisoReloj = 0;
+
+function pintar(animar) {
+  if (animar) { avisoHasta = 0; clearTimeout(avisoReloj); }   // una acción válida borra cualquier aviso
+  const l = st.libro, i = st.pos[l], c = capitulo(l, i);
+  el.libro.value = l;
+  el.etq.textContent = c ? 'capítulo' : 'fin';
+  el.num.textContent = c || '✱✱✱';
+  el.num.classList.toggle('fin', !c);
+  el.num.title = c ? 'Cambiar de capítulo' : '';
+  el.sig.textContent = c ? 'siguiente →' : 'segundo libro →';
+  el.ant.classList.toggle('nada', i === 0);
+  if (animar && !quieto.matches && el.num.animate) {
+    el.num.animate([{opacity: 0, transform: 'translateY(.06em)'}, {opacity: 1, transform: 'none'}], {duration: 240, easing: 'ease-out'});
+  }
+  ponerNota();
+  const k = casilla(l, i);
+  el.casillas.forEach(x => x.classList.toggle('pisada', +x.dataset.k < k));
+  moverPiedra(k, animar);
+  el.titulo.textContent = k === 10 ? 'La piedrita llegó al cielo.' : `La piedrita está en la casilla ${k} de la rayuela.`;
+  document.title = c ? `${c} · Rayuel-o-matic` : 'Rayuel-o-matic';
+  if (animar) el.voz.textContent = (c ? `Capítulo ${c}. ` : 'Fin del primer libro. ') + el.nota.textContent;
+}
+function ponerNota() {
+  if (Date.now() < avisoHasta) return;
+  const l = st.libro, i = st.pos[l], n = TOTAL[l];
+  el.nota.textContent = i === 0 ? 'Léelo en tu ejemplar y pulsa «siguiente».'
+    : l === 2 && i >= n ? `${n} de ${n} · ∞`
+    : `${Math.min(i, n)} de ${n}`;
+}
+function avisar(txt) {
+  el.nota.textContent = el.voz.textContent = txt;
+  avisoHasta = Date.now() + 3500;
+  clearTimeout(avisoReloj);
+  avisoReloj = setTimeout(() => { avisoHasta = 0; ponerNota(); }, 3500);
+}
+function moverPiedra(k, animar) {
+  const donde = q => [CENTRO[q][0] + 12, CENTRO[q][1] + 12];
+  const [x, y] = donde(k);
+  if (animar && kAntes && kAntes !== k && !quieto.matches && el.piedra.animate) {
+    const [x0, y0] = donde(kAntes), alto = 26 + Math.abs(y - y0) * .15, cuadros = [];
+    for (let j = 0; j <= 12; j++) {
+      const t = j / 12;
+      cuadros.push({transform: `translate(${x0 + (x - x0) * t}px,${y0 + (y - y0) * t - alto * 4 * t * (1 - t)}px)`});
+    }
+    el.piedra.animate(cuadros, {duration: 520, easing: 'ease-in-out'});
+  }
+  el.piedra.style.transform = `translate(${x}px,${y}px)`;
+  kAntes = k;
+}
+
+/* ---------- ir a un capítulo: tocar el número ---------- */
+el.num.addEventListener('click', () => {
+  if (!capitulo(st.libro, st.pos[st.libro])) return;
+  el.num.hidden = true; el.ir.hidden = false;
+  el.irN.value = ''; el.irN.placeholder = el.num.textContent;
+  el.irN.focus();
+});
+function confirmarIr() {
+  if (el.ir.hidden) return;
+  const v = el.irN.value.trim();
+  el.ir.hidden = true; el.num.hidden = false;
+  if (v) irA(parseInt(v, 10));
+}
+el.ir.addEventListener('submit', ev => { ev.preventDefault(); confirmarIr(); el.num.focus(); });
+el.irN.addEventListener('blur', confirmarIr);
+el.irN.addEventListener('input', () => { el.irN.value = el.irN.value.replace(/\D/g, '').slice(0, 3); });
+el.irN.addEventListener('keydown', ev => {
+  if (ev.key === 'Escape') { ev.preventDefault(); el.irN.value = ''; confirmarIr(); el.num.focus(); }
+});
+
+el.sig.addEventListener('click', siguiente);
+el.ant.addEventListener('click', anterior);
+el.libro.addEventListener('change', () => cambiarLibro(+el.libro.value));
+document.addEventListener('keydown', ev => {
+  if (ev.altKey || ev.ctrlKey || ev.metaKey || ev.shiftKey) return;
+  if (document.querySelector('dialog[open]') || /^(INPUT|SELECT|TEXTAREA)$/.test(ev.target.tagName)) return;
+  if (ev.key === 'ArrowRight') { ev.preventDefault(); siguiente(); }
+  else if (ev.key === 'ArrowLeft') { ev.preventDefault(); anterior(); }
+});
+
+/* ---------- ventanas ---------- */
+function abrir(id) {
+  if (id === 'sesiones') pintarSesiones();
+  if (id === 'llevar') pintarCodigo();
+  $(id).showModal();
+}
+document.querySelectorAll('[data-abre]').forEach(b => b.addEventListener('click', () => abrir(b.dataset.abre)));
+document.querySelectorAll('dialog').forEach(d => {
+  d.addEventListener('click', ev => { if (ev.target === d) d.close(); });
+  d.querySelectorAll('[data-cierra]').forEach(b => b.addEventListener('click', () => d.close()));
+});
+
+/* ---------- sesiones ---------- */
+const fmtCorto = new Intl.DateTimeFormat('es', {weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC'});
+const fmtLargo = new Intl.DateTimeFormat('es', {day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC'});
+function fecha(d) {
+  const f = new Date(EPOCA + d * 864e5);
+  return (f.getUTCFullYear() === new Date().getFullYear() ? fmtCorto : fmtLargo).format(f).replace(/\./g, '');
+}
+function pintarSesiones() {
+  const ambos = new Set(st.log.map(e => e.l)).size > 1, sesiones = [];
+  for (const e of st.log) e.j && sesiones.length ? sesiones[sesiones.length - 1].push(e) : sesiones.push([e]);
+  const caps = st.log.reduce((a, e) => a + e.c, 0);
+  $('ses-resumen').textContent = sesiones.length
+    ? `${plural(sesiones.length, 'sesión', 'sesiones')} · ${plural(caps, 'capítulo leído', 'capítulos leídos')}`
+    : 'Aún no hay sesiones. Cada vez que pulses «siguiente», el capítulo que terminaste quedará anotado aquí con su fecha.';
+  $('ses-lista').replaceChildren(...sesiones.reverse().map(tramos => {
+    const li = document.createElement('li'), f = document.createElement('span'), c = document.createElement('span');
+    f.className = 'f';
+    f.textContent = fecha(tramos[0].d);
+    c.textContent = tramos.map(e => (ambos ? `${e.l}º: ` : '') +       // el «·» no empieza nunca una línea
+      Array.from({length: e.c}, (_, k) => capitulo(e.l, e.s + k)).join(' · ')).join(' … ');
+    li.append(f, c);
+    return li;
+  }));
+}
+
+/* ---------- otro dispositivo: un código con todo el estado ----------
+   Enteros en varint; cada tramo: salto de días, (capítulos·8 + libro·4 + misma sesión·2 + seguido)
+   y, si no sigue al tramo anterior de su libro, su inicio. Suma de control y base32 de Crockford. */
+const suma = a => a.reduce((c, b) => (c * 31 + b) % 251, 7);
+function codificar(s) {
+  const a = [];
+  const v = x => { while (x > 127) { a.push((x & 127) | 128); x = Math.floor(x / 128); } a.push(x); };
+  v(1); v(s.libro); v(s.pos[1]); v(s.pos[2]); v(s.log.length);
+  let d0 = 0;
+  const fin = {1: 0, 2: 0};
+  for (const e of s.log) {
+    const dd = e.d - d0;
+    d0 = e.d;
+    v(dd >= 0 ? dd * 2 : -dd * 2 - 1);
+    const seguido = e.s === fin[e.l] ? 1 : 0;
+    v(e.c * 8 + (e.l - 1) * 4 + (e.j ? 2 : 0) + seguido);
+    if (!seguido) v(e.s);
+    fin[e.l] = e.s + e.c;
+  }
+  a.push(suma(a));
+  let out = '', buf = 0, n = 0;
+  for (const b of a) {
+    buf = (buf << 8) | b; n += 8;
+    while (n >= 5) { n -= 5; out += B32[(buf >> n) & 31]; }
+    buf &= (1 << n) - 1;
+  }
+  if (n) out += B32[(buf << (5 - n)) & 31];
+  return out.match(/.{1,4}/g).join('-');
+}
+function decodificar(txt) {
+  const limpio = String(txt).toUpperCase().replace(/[\s-]/g, '').replace(/O/g, '0').replace(/[IL]/g, '1');
+  const a = [];
+  let buf = 0, n = 0;
+  for (const ch of limpio) {
+    const x = B32.indexOf(ch);
+    if (x < 0) return null;
+    buf = (buf << 5) | x; n += 5;
+    if (n >= 8) { n -= 8; a.push((buf >> n) & 255); }
+    buf &= (1 << n) - 1;
+  }
+  if (a.length < 6 || a.pop() !== suma(a)) return null;
+  let i = 0;
+  const v = () => {
+    let x = 0, m = 1, b;
+    do { if (i >= a.length || m > 2 ** 35) throw 0; b = a[i++]; x += (b & 127) * m; m *= 128; } while (b & 128);
+    return x;
+  };
+  try {
+    if (v() !== 1) return null;
+    const libro = v(), p1 = v(), p2 = v(), total = v(), log = [], fin = {1: 0, 2: 0};
+    let d = 0;
+    for (let k = 0; k < total; k++) {
+      const z = v();
+      d += z % 2 ? -(z + 1) / 2 : z / 2;
+      const f = v(), l = (Math.floor(f / 4) % 2) + 1, c = Math.floor(f / 8), j = Math.floor(f / 2) % 2, s = f % 2 ? fin[l] : v();
+      fin[l] = s + c;
+      log.push({d, l, s, c, j, t: 0});
+    }
+    return i === a.length ? sano({libro, pos: {1: p1, 2: p2}, log}) : null;
+  } catch (e) { return null; }
+}
+
+let enlace = '', pendiente = null;
+function pintarCodigo() {
+  const c = capitulo(st.libro, st.pos[st.libro]), n = st.log.filter(e => !e.j).length;
+  const dondeVas = `${libroTxt(st.libro)}, ${c ? 'capítulo ' + c : 'terminado'}`;
+  $('llevar-txt').textContent = `Para seguir en otro dispositivo, escribe allí este código o envíate el enlace. Lleva por dónde vas (${dondeVas})${n ? ' y tus ' + plural(n, 'sesión', 'sesiones') : ''}.`;
+  const codigo = codificar(st), grupos = codigo.split('-');
+  $('codigo').replaceChildren(...grupos.flatMap((g, k) =>     // solo se parte entre grupos
+    k < grupos.length - 1 ? [g + '-', document.createElement('wbr')] : [g]));
+  enlace = location.href.split('#')[0] + '#' + codigo;
+  $('cargar-aviso').textContent = '';
+}
+async function copiar(txt, boton, hecho) {
+  try { await navigator.clipboard.writeText(txt); }
+  catch (e) {
+    const r = document.createRange();
+    r.selectNodeContents($('codigo'));
+    getSelection().removeAllRanges(); getSelection().addRange(r);
+    return;
+  }
+  const antes = boton.textContent;
+  boton.textContent = hecho;
+  setTimeout(() => { boton.textContent = antes; }, 1600);
+}
+$('copiar').addEventListener('click', ev => copiar($('codigo').textContent, ev.currentTarget, 'copiado ✓'));
+$('compartir').addEventListener('click', async ev => {
+  const b = ev.currentTarget;
+  if (navigator.share) {
+    try { await navigator.share({title: 'Rayuel-o-matic', url: enlace}); return; }
+    catch (e) { if (e.name === 'AbortError') return; }
+  }
+  copiar(enlace, b, 'enlace copiado ✓');
+});
+$('cargar').addEventListener('submit', ev => {
+  ev.preventDefault();
+  const s = decodificar($('cargar-c').value);
+  if (!s) { $('cargar-aviso').textContent = 'Ese código no es válido: revisa que esté completo.'; return; }
+  $('cargar-c').value = '';
+  pedirCarga(s);
+});
+function pedirCarga(s) {
+  pendiente = s;
+  const c = capitulo(s.libro, s.pos[s.libro]), lt = libroTxt(s.libro);
+  $('imp-txt').textContent = `${lt[0].toUpperCase() + lt.slice(1)}, ${c ? 'capítulo ' + c : 'terminado'} · ${plural(s.log.filter(e => !e.j).length, 'sesión', 'sesiones')}.`;
+  $('llevar').close();
+  $('importar').showModal();
+}
+$('imp-si').addEventListener('click', () => {
+  if (pendiente) { st = pendiente; pendiente = null; guardar(); pintar(true); }
+  $('importar').close();
+});
+
+/* ---------- empezar de nuevo ---------- */
+$('reiniciar').addEventListener('click', () => {
+  if (!confirm(`¿Volver al principio del ${libroTxt(st.libro)}? Tus sesiones se conservan.`)) return;
+  st.pos[st.libro] = 0; guardar(); pintar(true); $('acerca').close();
+});
+$('borrar').addEventListener('click', () => {
+  if (!confirm('¿Borrar tu progreso y tus sesiones de este navegador?')) return;
+  st = nuevo(); guardar(); pintar(true); $('acerca').close();
+});
+
+/* ---------- arranque ---------- */
+addEventListener('storage', ev => {
+  if (ev.key !== CLAVE) return;
+  const s = leer();
+  if (s) { st = s; pintar(false); }
+});
+pintar(false);
+let h = '';
+try { h = decodeURIComponent(location.hash.slice(1)); } catch (e) {}
+if (h) {
+  history.replaceState(null, '', location.pathname + location.search);
+  const s = decodificar(h);
+  if (s) pedirCarga(s);
+}
+})();
+</script>
+</body>
+</html>
